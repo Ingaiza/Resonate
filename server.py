@@ -164,6 +164,8 @@ HTML_PAGE = """
             const symbolPromises = words.map(async (word) => {
                 let cleanWord = word.toLowerCase().replace(/[^a-z0-9]/g, '');
                 if (word === '[QUESTION]') cleanWord = 'question';
+                if (cleanWord === 'am' || cleanWord === 'pm') cleanWord = 'force_fallback_string';
+                
                 
                 let imgSrc = null;
 
