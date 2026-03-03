@@ -4,16 +4,20 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-current_gloss = "Waiting for speech..."
+# Now holding all three modes
+current_payload = {
+    "mode1": "Waiting for speech...",
+    "mode2": "WAIT FOR SPEECH",
+    "mode3": "SPEECH WAIT"
+}
 
-# Upgraded Hackathon UI with ARASAAC Integration
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HaptiHear | Live ARASAAC Translation</title>
+    <title>RESONATE | Live ARASAAC Translation</title>
     <style>
         body {
             background-color: #121212;
@@ -24,12 +28,34 @@ HTML_PAGE = """
             align-items: center;
             height: 100vh;
             margin: 0;
-            padding-top: 50px;
+            padding-top: 30px;
         }
         h1 { color: #bb86fc; font-size: 2.5rem; margin-bottom: 5px; }
-        .subtitle { color: #a0a0a0; font-size: 1.2rem; margin-bottom: 50px; }
+        .subtitle { color: #a0a0a0; font-size: 1.2rem; margin-bottom: 30px; }
         
-        /* The container that holds all the symbol cards */
+        /* 🛑 NEW: Mode Toggle UI */
+        .toggle-container {
+            display: flex;
+            background-color: #1e1e1e;
+            border-radius: 30px;
+            padding: 5px;
+            margin-bottom: 40px;
+            border: 1px solid #333;
+        }
+        .toggle-container input[type="radio"] { display: none; }
+        .toggle-label {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 25px;
+            color: #888;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .toggle-container input[type="radio"]:checked + .toggle-label {
+            background-color: #bb86fc;
+            color: #121212;
+        }
+
         #symbol-container {
             display: flex;
             flex-wrap: wrap;
@@ -39,7 +65,6 @@ HTML_PAGE = """
             min-height: 200px;
         }
 
-        /* Individual Word/Pictogram Card */
         .symbol-card {
             background-color: #1e1e1e;
             border: 2px solid #333;
@@ -89,19 +114,48 @@ HTML_PAGE = """
             letter-spacing: 1px;
             color: #bb86fc;
             text-align: center;
+            text-transform: uppercase;
         }
     </style>
 </head>
 <body>
-    <h1>HaptiHear</h1>
+    <h1>RESONATE</h1>
     <div class="subtitle">Real-Time NLP to ARASAAC Pictogram Engine</div>
     
+    <div class="toggle-container">
+        <input type="radio" id="mode1" name="mode" value="mode1">
+        <label for="mode1" class="toggle-label">1. Raw Text</label>
+        
+        <input type="radio" id="mode2" name="mode" value="mode2" checked>
+        <label for="mode2" class="toggle-label">2. Semi-Lemmatized</label>
+        
+        <input type="radio" id="mode3" name="mode" value="mode3">
+        <label for="mode3" class="toggle-label">3. Sign Language</label>
+    </div>
+
     <div id="symbol-container">
         <div class="symbol-card"><div class="gloss-word">Listening...</div></div>
     </div>
 
     <script>
+        let latestData = { mode1: "", mode2: "", mode3: "" };
         let lastDisplayedText = "";
+
+        // Instantly switch display when a new mode is clicked!
+        document.querySelectorAll('input[name="mode"]').forEach(radio => {
+            radio.addEventListener('change', updateDisplay);
+        });
+
+        function updateDisplay() {
+            const selectedMode = document.querySelector('input[name="mode"]:checked').value;
+            const textToDisplay = latestData[selectedMode];
+            
+            if (textToDisplay && textToDisplay !== lastDisplayedText) {
+                lastDisplayedText = textToDisplay;
+                const wordsArray = textToDisplay.split(' ').filter(w => w.length > 0);
+                fetchArasaacData(wordsArray);
+            }
+        }
 
         async function fetchArasaacData(words) {
             const container = document.getElementById('symbol-container');
@@ -159,11 +213,8 @@ HTML_PAGE = """
             fetch('/api/current')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.text && data.text !== lastDisplayedText) {
-                        lastDisplayedText = data.text;
-                        const wordsArray = data.text.split(' ').filter(w => w.length > 0);
-                        fetchArasaacData(wordsArray);
-                    }
+                    latestData = data;
+                    updateDisplay();
                 })
                 .catch(err => console.error("Polling error:", err));
         }, 500);
@@ -178,17 +229,17 @@ def index():
 
 @app.route('/api/update', methods=['POST'])
 def update_gloss():
-    global current_gloss
+    global current_payload
     data = request.json
-    if not data or 'text' not in data:
-        return jsonify({"error": "Missing text"}), 400
+    if not data or 'mode1' not in data:
+        return jsonify({"error": "Missing payload data"}), 400
     
-    current_gloss = data['text']
+    current_payload = data
     return jsonify({"status": "success"}), 200
 
 @app.route('/api/current', methods=['GET'])
 def get_current_gloss():
-    return jsonify({"text": current_gloss}), 200
+    return jsonify(current_payload), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
